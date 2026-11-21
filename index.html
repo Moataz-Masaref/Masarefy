@@ -77,11 +77,23 @@ body.eg .fab,body.eg .btn:not(.ghost):not(.danger){background:#c2410c}
 body.eg nav button.on{color:#c2410c}
 input:disabled,.btn:disabled{opacity:.45}
 .lockbar{display:flex;gap:8px;align-items:center;margin-bottom:6px}
-.chart svg{width:100%;height:auto;display:block}
+.mrow{padding:10px;border-radius:12px;margin-bottom:6px;cursor:pointer;border:1px solid transparent}
+.mrow.on{background:var(--pri2);border-color:var(--pri)}
+.mrow .mh{display:flex;justify-content:space-between;align-items:center;font-size:14px;margin-bottom:6px}
+.mrow .net{font-size:12px;font-weight:700;padding:1px 8px;border-radius:20px;background:var(--bg)}
+.hb{display:flex;align-items:center;gap:8px;margin-top:4px}
+.hb .tr{flex:1;height:14px;background:var(--bg);border-radius:7px;overflow:hidden}
+.hb .tr i{display:block;height:100%;border-radius:7px;transition:width .4s}
+.hb .tr i.e{background:linear-gradient(90deg,#f97316,#c2410c)}
+.hb .tr i.n{background:linear-gradient(90deg,#4ade80,#15803d)}
+.hb em{font-style:normal;font-size:12px;font-weight:700;min-width:62px;text-align:left}
+.sumbox{display:flex;gap:8px;margin:8px 0 10px}
+.sumbox div{flex:1;background:var(--bg);border-radius:10px;padding:8px;text-align:center}
+.sumbox small{display:block;color:var(--mut);font-size:11px}.sumbox b{font-size:14px}
 .chart .lg{display:flex;gap:14px;font-size:12px;color:var(--mut);margin:4px 0 6px}
 .chart .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:4px;vertical-align:middle}
 .cmp{font-size:13px;margin-top:8px;line-height:1.8}
-.seg.sm{margin:0 0 6px;width:150px}.seg.sm button{padding:5px;font-size:12px}
+.seg.sm{margin:0 0 6px;width:190px}.seg.sm button{padding:5px;font-size:12px}
 </style>
 </head>
 <body>
@@ -117,10 +129,11 @@ input:disabled,.btn:disabled{opacity:.45}
     </div>
     <div class="card chart">
       <div class="lockbar"><h3 style="margin:0;flex:1">📈 مقارنة الشهور</h3>
-        <div class="seg sm" id="cRange"><button data-n="6" class="on">6 شهور</button><button data-n="12">سنة</button></div></div>
+        <div class="seg sm" id="cRange"><button data-n="6" class="on">6 شهور</button><button data-n="12">سنة</button><button data-n="999">الكل</button></div></div>
       <div class="lg"><span><i style="background:var(--red)"></i>المصاريف</span><span><i style="background:var(--green)"></i><span id="cIncL">الدخل</span></span></div>
-      <div id="cSvg"></div>
       <div class="cmp" id="cCmp"></div>
+      <div class="sumbox" id="cSum"></div>
+      <div id="cSvg"></div>
     </div>
     <div class="card"><h3>حسب البند</h3><div id="rCats"></div></div>
     <div class="card"><h3>كل العمليات</h3>
@@ -334,37 +347,32 @@ $('cRange').onclick=e=>{const b=e.target.closest('button');if(!b)return;cN=+b.da
 const addM=(k,n)=>{const [y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
 const short=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=1e4?0:1)+'k':String(Math.round(n));
 function renderChart(){
-  const keys=[];for(let i=cN-1;i>=0;i--)keys.push(addM(curMonth,-i));
-  const data=keys.map(k=>{const s=monthStats(k);return{k,exp:s.exp,inc:s.inc}});
   $('cIncL').textContent=region==='EG'?'الإيداعات':'الدخل';
+  const set=new Set();allTx().filter(inRegion).forEach(t=>{if(t.t!=='trf')set.add(mKey(t.d))});
+  const keys=[...set].sort().reverse().slice(0,cN);
+  if(!keys.length){$('cSvg').innerHTML='<div class="empty">لسه مفيش بيانات</div>';$('cSum').innerHTML='';$('cCmp').innerHTML='';return}
+  const data=keys.map(k=>{const s=monthStats(k);return{k,exp:s.exp,inc:s.inc}});
   const max=Math.max(1,...data.map(d=>Math.max(d.exp,d.inc)));
-  const W=340,H=190,L=32,R=4,T=16,B=26,cw=(W-L-R)/data.length,bw=Math.min(16,cw*0.34);
-  const y=v=>T+(H-T-B)*(1-v/max);
-  let g='';
-  [0,.5,1].forEach(f=>{const yy=y(max*f);g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${L-4}" y="${yy+4}" font-size="9" text-anchor="end" fill="var(--mut)">${short(max*f)}</text>`});
-  // الأحدث على الشمال (اتجاه عربي)
-  data.forEach((d,i)=>{
-    const cx=W-R-cw*(i+.5);const on=d.k===curMonth;
-    g+=`<g class="cbar" data-k="${d.k}" style="cursor:pointer"><rect x="${cx-cw/2}" y="${T}" width="${cw}" height="${H-T}" fill="${on?'var(--pri2)':'transparent'}" rx="6"/>`;
-    g+=`<rect x="${cx+1}" y="${y(d.exp)}" width="${bw}" height="${Math.max(0,H-B-y(d.exp))}" fill="var(--red)" rx="3"/>`;
-    g+=`<rect x="${cx-bw-1}" y="${y(d.inc)}" width="${bw}" height="${Math.max(0,H-B-y(d.inc))}" fill="var(--green)" rx="3"/>`;
-    if(cN<=6){if(d.exp)g+=`<text x="${cx+1+bw/2}" y="${y(d.exp)-3}" font-size="8" text-anchor="middle" fill="var(--red)">${short(d.exp)}</text>`;if(d.inc)g+=`<text x="${cx-1-bw/2}" y="${y(d.inc)-3}" font-size="8" text-anchor="middle" fill="var(--green)">${short(d.inc)}</text>`}
-    const mi=+d.k.slice(5,7)-1;
-    g+=`<text x="${cx}" y="${H-10}" font-size="${cN<=6?10:8}" text-anchor="middle" fill="${on?'var(--ink)':'var(--mut)'}" font-weight="${on?700:400}">${cN<=6?MONTHS[mi]:MONTHS[mi].slice(0,3)}</text></g>`;
-  });
-  $('cSvg').innerHTML=`<svg viewBox="0 0 ${W} ${H}" direction="ltr" style="direction:ltr" font-family="Cairo,sans-serif">${g}</svg>`;
-  // المقارنة
-  const cur=data[data.length-1],prev=data[data.length-2];
+  $('cSvg').innerHTML=data.map(d=>{
+    const net=d.inc-d.exp;
+    return `<div class="mrow ${d.k===curMonth?'on':''}" data-k="${d.k}">
+      <div class="mh"><b>${mLabel(d.k)}</b>${d.inc?`<span class="net ${net>=0?'pos':'neg'}">${net>=0?'وفّرت ':'زيادة '}${fmt(Math.abs(net))}</span>`:''}</div>
+      <div class="hb"><div class="tr"><i class="e" style="width:${d.exp/max*100}%"></i></div><em class="neg">${fmt(d.exp)}</em></div>
+      ${d.inc?`<div class="hb"><div class="tr"><i class="n" style="width:${d.inc/max*100}%"></i></div><em class="pos">${fmt(d.inc)}</em></div>`:''}
+    </div>`}).join('');
   const withExp=data.filter(d=>d.exp>0);
   const avg=withExp.length?withExp.reduce((a,d)=>a+d.exp,0)/withExp.length:0;
+  const hi=withExp.reduce((a,d)=>!a||d.exp>a.exp?d:a,null),lo=withExp.reduce((a,d)=>!a||d.exp<a.exp?d:a,null);
+  $('cSum').innerHTML=withExp.length>1?`<div><small>متوسط الصرف</small><b>${fmt(avg)}</b></div><div><small>أعلى شهر</small><b class="neg">${MONTHS[+hi.k.slice(5,7)-1]}</b></div><div><small>أقل شهر</small><b class="pos">${MONTHS[+lo.k.slice(5,7)-1]}</b></div>`:'';
+  // مقارنة الشهر المختار باللي قبله
+  const cur=monthStats(curMonth);
+  const prevK=[...set].sort().reverse().find(k=>k<curMonth);
   let h='';
-  if(prev&&prev.exp>0){const df=cur.exp-prev.exp;const pc=Math.round(Math.abs(df)/prev.exp*100);
-    h+=df>0?`🔺 مصاريف ${mLabel(cur.k)} <b class="neg">أكتر</b> من ${MONTHS[+prev.k.slice(5,7)-1]} بـ <b>${fmt(df)}</b> (${pc}%)<br>`:df<0?`🔻 مصاريف ${mLabel(cur.k)} <b class="pos">أقل</b> من ${MONTHS[+prev.k.slice(5,7)-1]} بـ <b>${fmt(-df)}</b> (${pc}%)<br>`:'نفس مصاريف الشهر اللي قبله<br>'}
-  if(avg)h+=`📊 متوسط الصرف الشهري: <b>${fmt(avg)}</b><br>`;
-  if(cur.inc)h+=`💰 الفرق بين الدخل والصرف الشهر ده: <b class="${cur.inc-cur.exp>=0?'pos':'neg'}">${fmt(cur.inc-cur.exp)}</b>`;
-  $('cCmp').innerHTML=h||'<span class="muted">سجّل مصاريف أكتر عشان تظهر المقارنة</span>';
+  if(prevK&&cur.exp){const pv=monthStats(prevK).exp;const df=cur.exp-pv;const pc=pv?Math.round(Math.abs(df)/pv*100):0;const pn=MONTHS[+prevK.slice(5,7)-1];
+    h=df>0?`🔺 صرفت في ${MONTHS[+curMonth.slice(5,7)-1]} <b class="neg">أكتر</b> من ${pn} بـ <b>${fmt(df)}</b> · ${pc}%`:df<0?`🔻 صرفت في ${MONTHS[+curMonth.slice(5,7)-1]} <b class="pos">أقل</b> من ${pn} بـ <b>${fmt(-df)}</b> · ${pc}%`:`نفس مصاريف ${pn}`}
+  $('cCmp').innerHTML=h;
 }
-$('cSvg').onclick=e=>{const g=e.target.closest('.cbar');if(!g)return;curMonth=g.dataset.k;renderMonth()};
+$('cSvg').onclick=e=>{const g=e.target.closest('.mrow');if(!g)return;curMonth=g.dataset.k;renderMonth();window.scrollTo({top:0,behavior:'smooth'})};
 
 /* ===== التبويبات والتنقل ===== */
 $('rTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;region=b.dataset.r;try{localStorage.setItem('masarefy_region',region)}catch(e){}renderAll()};
