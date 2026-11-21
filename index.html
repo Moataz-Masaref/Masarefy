@@ -20,7 +20,7 @@ header{background:var(--pri);color:#fff;padding:16px 16px 14px}
 @media (prefers-color-scheme:dark){header{color:#06201d}}
 header h1{margin:0;font-size:20px;font-weight:800}
 header .st{font-size:12px;opacity:.85}
-main{padding:12px;max-width:560px;margin:auto}
+main{padding:12px 12px 70px;max-width:560px;margin:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 .row{display:flex;gap:10px}.row>*{flex:1}
 .acc .lbl{font-size:13px;color:var(--mut)}.acc .val{font-size:22px;font-weight:800}
@@ -77,6 +77,11 @@ body.eg .fab,body.eg .btn:not(.ghost):not(.danger){background:#c2410c}
 body.eg nav button.on{color:#c2410c}
 input:disabled,.btn:disabled{opacity:.45}
 .lockbar{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.chart svg{width:100%;height:auto;display:block}
+.chart .lg{display:flex;gap:14px;font-size:12px;color:var(--mut);margin:4px 0 6px}
+.chart .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:4px;vertical-align:middle}
+.cmp{font-size:13px;margin-top:8px;line-height:1.8}
+.seg.sm{margin:0 0 6px;width:150px}.seg.sm button{padding:5px;font-size:12px}
 </style>
 </head>
 <body>
@@ -109,6 +114,13 @@ input:disabled,.btn:disabled{opacity:.45}
         <div><div class="muted" id="rIncL">الدخل / الراتب</div><b class="pos" id="rInc">0</b></div>
         <div class="sa-only"><div class="muted">المحوّل</div><b class="trf" id="rTrf">0</b></div>
       </div>
+    </div>
+    <div class="card chart">
+      <div class="lockbar"><h3 style="margin:0;flex:1">📈 مقارنة الشهور</h3>
+        <div class="seg sm" id="cRange"><button data-n="6" class="on">6 شهور</button><button data-n="12">سنة</button></div></div>
+      <div class="lg"><span><i style="background:var(--red)"></i>المصاريف</span><span><i style="background:var(--green)"></i><span id="cIncL">الدخل</span></span></div>
+      <div id="cSvg"></div>
+      <div class="cmp" id="cCmp"></div>
     </div>
     <div class="card"><h3>حسب البند</h3><div id="rCats"></div></div>
     <div class="card"><h3>كل العمليات</h3>
@@ -312,7 +324,47 @@ function renderMonth(){
   const q=$('search').value.trim();
   const list=sortTx((months[curMonth]||[]).filter(inRegion)).filter(t=>!q||(t.note||'').includes(q)||(t.cat||'').includes(q)||(t.by||'').includes(q));
   $('rList').innerHTML=list.length?list.map(txHTML).join(''):'<div class="empty">مفيش عمليات</div>';
+  renderChart();
 }
+
+
+/* ===== شارت مقارنة الشهور ===== */
+let cN=6;
+$('cRange').onclick=e=>{const b=e.target.closest('button');if(!b)return;cN=+b.dataset.n;document.querySelectorAll('#cRange button').forEach(x=>x.classList.toggle('on',x===b));renderChart()};
+const addM=(k,n)=>{const [y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
+const short=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1000?(n/1000).toFixed(n>=1e4?0:1)+'k':String(Math.round(n));
+function renderChart(){
+  const keys=[];for(let i=cN-1;i>=0;i--)keys.push(addM(curMonth,-i));
+  const data=keys.map(k=>{const s=monthStats(k);return{k,exp:s.exp,inc:s.inc}});
+  $('cIncL').textContent=region==='EG'?'الإيداعات':'الدخل';
+  const max=Math.max(1,...data.map(d=>Math.max(d.exp,d.inc)));
+  const W=340,H=190,L=32,R=4,T=16,B=26,cw=(W-L-R)/data.length,bw=Math.min(16,cw*0.34);
+  const y=v=>T+(H-T-B)*(1-v/max);
+  let g='';
+  [0,.5,1].forEach(f=>{const yy=y(max*f);g+=`<line x1="${L}" x2="${W-R}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="${L-4}" y="${yy+4}" font-size="9" text-anchor="end" fill="var(--mut)">${short(max*f)}</text>`});
+  // الأحدث على الشمال (اتجاه عربي)
+  data.forEach((d,i)=>{
+    const cx=W-R-cw*(i+.5);const on=d.k===curMonth;
+    g+=`<g class="cbar" data-k="${d.k}" style="cursor:pointer"><rect x="${cx-cw/2}" y="${T}" width="${cw}" height="${H-T}" fill="${on?'var(--pri2)':'transparent'}" rx="6"/>`;
+    g+=`<rect x="${cx+1}" y="${y(d.exp)}" width="${bw}" height="${Math.max(0,H-B-y(d.exp))}" fill="var(--red)" rx="3"/>`;
+    g+=`<rect x="${cx-bw-1}" y="${y(d.inc)}" width="${bw}" height="${Math.max(0,H-B-y(d.inc))}" fill="var(--green)" rx="3"/>`;
+    if(cN<=6){if(d.exp)g+=`<text x="${cx+1+bw/2}" y="${y(d.exp)-3}" font-size="8" text-anchor="middle" fill="var(--red)">${short(d.exp)}</text>`;if(d.inc)g+=`<text x="${cx-1-bw/2}" y="${y(d.inc)-3}" font-size="8" text-anchor="middle" fill="var(--green)">${short(d.inc)}</text>`}
+    const mi=+d.k.slice(5,7)-1;
+    g+=`<text x="${cx}" y="${H-10}" font-size="${cN<=6?10:8}" text-anchor="middle" fill="${on?'var(--ink)':'var(--mut)'}" font-weight="${on?700:400}">${cN<=6?MONTHS[mi]:MONTHS[mi].slice(0,3)}</text></g>`;
+  });
+  $('cSvg').innerHTML=`<svg viewBox="0 0 ${W} ${H}" direction="ltr" style="direction:ltr" font-family="Cairo,sans-serif">${g}</svg>`;
+  // المقارنة
+  const cur=data[data.length-1],prev=data[data.length-2];
+  const withExp=data.filter(d=>d.exp>0);
+  const avg=withExp.length?withExp.reduce((a,d)=>a+d.exp,0)/withExp.length:0;
+  let h='';
+  if(prev&&prev.exp>0){const df=cur.exp-prev.exp;const pc=Math.round(Math.abs(df)/prev.exp*100);
+    h+=df>0?`🔺 مصاريف ${mLabel(cur.k)} <b class="neg">أكتر</b> من ${MONTHS[+prev.k.slice(5,7)-1]} بـ <b>${fmt(df)}</b> (${pc}%)<br>`:df<0?`🔻 مصاريف ${mLabel(cur.k)} <b class="pos">أقل</b> من ${MONTHS[+prev.k.slice(5,7)-1]} بـ <b>${fmt(-df)}</b> (${pc}%)<br>`:'نفس مصاريف الشهر اللي قبله<br>'}
+  if(avg)h+=`📊 متوسط الصرف الشهري: <b>${fmt(avg)}</b><br>`;
+  if(cur.inc)h+=`💰 الفرق بين الدخل والصرف الشهر ده: <b class="${cur.inc-cur.exp>=0?'pos':'neg'}">${fmt(cur.inc-cur.exp)}</b>`;
+  $('cCmp').innerHTML=h||'<span class="muted">سجّل مصاريف أكتر عشان تظهر المقارنة</span>';
+}
+$('cSvg').onclick=e=>{const g=e.target.closest('.cbar');if(!g)return;curMonth=g.dataset.k;renderMonth()};
 
 /* ===== التبويبات والتنقل ===== */
 $('rTabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;region=b.dataset.r;try{localStorage.setItem('masarefy_region',region)}catch(e){}renderAll()};
