@@ -1,5 +1,5 @@
-// مصاريفي v10 — بيجيب أحدث نسخة من النت الأول، ولو مفيش نت بيشتغل من النسخة المحفوظة
-const C='masarefy-v10';
+// مصاريفي v12 — بيجيب أحدث نسخة من النت الأول، ولو مفيش نت بيشتغل من النسخة المحفوظة
+const C='masarefy-v12';
 const F=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(C).then(c=>Promise.all(F.map(u=>fetch(new Request(u,{cache:'reload'})).then(r=>r.ok&&c.put(u,r)).catch(()=>{})))));
@@ -10,7 +10,8 @@ self.addEventListener('activate',e=>{
 });
 self.addEventListener('fetch',e=>{
   const req=e.request;
-  if(req.method!=='GET'||new URL(req.url).origin!==location.origin)return;
+  const u=new URL(req.url);
+  if(req.method!=='GET'||u.origin!==location.origin||u.searchParams.has('vcheck'))return;
   e.respondWith(
     fetch(req,{cache:'no-cache'}).then(res=>{
       if(res.ok){const cp=res.clone();caches.open(C).then(c=>c.put(req,cp))}

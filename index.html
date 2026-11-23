@@ -154,10 +154,17 @@ input:disabled,.btn:disabled{opacity:.45}
 .day.today small{color:var(--pri);font-weight:700}
 .dayhead{display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px}
 .dayhead b.neg{font-size:16px}
+header h1 .ver{font-size:11px;font-weight:300;opacity:.75;margin-right:6px;letter-spacing:.5px;vertical-align:middle}
+.upd{display:none;margin-top:8px;background:#fff;color:#0f766e;border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15);animation:pop .3s}
+.upd.show{display:flex;align-items:center;gap:8px}.upd span{flex:1}
+.upd b{background:#0f766e;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px}
+body.eg .upd{color:#9a3412}body.eg .upd b{background:#c2410c}
+@keyframes pop{from{transform:translateY(-6px);opacity:0}}
 </style>
 </head>
 <body>
-<header><h1>💰 مصاريفي</h1><div class="st" id="status">جاري التحميل…</div>
+<header><h1>💰 مصاريفي<span class="ver" id="ver"></span></h1><div class="st" id="status">جاري التحميل…</div>
+  <div class="upd" id="updBar"><span id="updTxt">🎉 فيه تحديث جديد</span><b>تحديث الآن</b></div>
   <div class="rtabs" id="rTabs"><button data-r="SA" class="on">🇸🇦 مصاريف السعودية</button><button data-r="EG">🇪🇬 مصاريف مصر</button></div>
 </header>
 <main>
@@ -340,6 +347,7 @@ input:disabled,.btn:disabled{opacity:.45}
 <div class="toast" id="toast"></div>
 
 <script>
+const APP_VER='v12';
 const CATS=[["أكل","🍽️"],["بقالة","🛒"],["بنزين","⛽"],["مواصلات","🚕"],["فواتير","🧾"],["بيت","🏠"],["صحة","💊"],["ملابس","👕"],["ترفيه","🎉"],["تحويل لأهلي","👨‍👩‍👧"],["اتصالات","📱"],["أخرى","📦"]];
 const catIcon=c=>(CATS.find(x=>x[0]===c)||["","📦"])[1];
 const $=id=>document.getElementById(id);
@@ -444,7 +452,7 @@ function txHTML(t){
   else if(t.t==='inc'){ic='💵';title=r==='EG'?'إيداع':'راتب / دخل';sub=accName(t.acc);cls='pos';sign='+'}
   else{ic='🔁';title='تحويل';sub=settings.nameA+' ← '+settings.nameB;cls='trf';sign=''}
   const d=new Date(t.d+'T00:00');const ds=d.getDate()+' '+MONTHS[d.getMonth()];
-  return `<div class="tx" data-id="${esc(t.id)}"><div class="ic">${ic}</div><div class="m"><div class="t">${esc(title)}</div><div class="s">${ds} · ${esc(sub)}${t.by?' · 👤 '+esc(t.by):''}${t.note?' · '+esc(t.note):''}</div></div><div class="amt ${cls}">${sign}${fmtR(t.amt,r)}</div></div>`
+  return `<div class="tx" data-id="${esc(t.id)}"><div class="ic">${ic}</div><div class="m"><div class="t">${esc(title)}</div><div class="s">${ds}${t.note?' · '+esc(t.note):''}</div></div><div class="amt ${cls}">${sign}${fmtR(t.amt,r)}</div></div>`
 }
 function renderAll(){
   rebuild();
@@ -771,6 +779,28 @@ function download(name,text,type){
   document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
 }
 $('exp').onclick=()=>download('masarefy_'+today()+'.csv',csv(),'text/csv;charset=utf-8');
+
+
+/* ===== رقم الإصدار والتحديث ===== */
+$('ver').textContent=APP_VER;
+let newVer='';
+async function checkUpdate(){
+  if(location.protocol!=='https:'&&location.protocol!=='http:')return;
+  try{
+    const r=await fetch('index.html?vcheck='+Date.now(),{cache:'no-store'});
+    const m=(await r.text()).match(/const APP_VER='([^']+)'/);
+    if(m&&m[1]!==APP_VER){newVer=m[1];$('updTxt').textContent='🎉 فيه تحديث جديد ('+newVer+')';$('updBar').classList.add('show')}
+  }catch(e){}
+}
+$('updBar').onclick=async()=>{
+  $('updTxt').textContent='⏳ جاري التحديث…';
+  try{const reg=await navigator.serviceWorker?.getRegistration();if(reg)await reg.update()}catch(e){}
+  try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){}
+  location.reload();
+};
+setTimeout(checkUpdate,3000);
+setInterval(checkUpdate,10*60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate()});
 
 /* ===== التشغيل ===== */
 lsLoad();showLock();renderAll();sync();
