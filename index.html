@@ -141,6 +141,19 @@ input:disabled,.btn:disabled{opacity:.45}
   #printArea .kpi b{display:block;font-size:16px}
   #printArea .n{white-space:nowrap;direction:ltr;text-align:left}
 }
+.days{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scroll-snap-type:x proximity;scrollbar-width:none}
+.days::-webkit-scrollbar{display:none}
+.day{flex:0 0 62px;scroll-snap-align:start;border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:6px 2px;text-align:center;cursor:pointer;color:var(--ink);font:inherit}
+.day small{display:block;font-size:10px;color:var(--mut)}
+.day .dn2{font-size:17px;font-weight:800;line-height:1.2}
+.day .vb{height:28px;display:flex;align-items:flex-end;justify-content:center;margin:3px 0}
+.day .vb i{width:12px;border-radius:4px 4px 2px 2px;background:linear-gradient(0deg,#c2410c,#f97316);min-height:2px}
+.day .dv{font-size:10px;font-weight:700;color:var(--red);white-space:nowrap}
+.day.zero .dv{color:var(--mut);font-weight:400}.day.zero .vb i{background:var(--line)}
+.day.on{border-color:var(--pri);background:var(--pri2)}
+.day.today small{color:var(--pri);font-weight:700}
+.dayhead{display:flex;justify-content:space-between;align-items:center;padding:8px 0 4px;border-top:1px solid var(--line);margin-top:4px}
+.dayhead b.neg{font-size:16px}
 </style>
 </head>
 <body>
@@ -156,6 +169,12 @@ input:disabled,.btn:disabled{opacity:.45}
       <div class="muted">مصاريف الشهر ده</div>
       <div class="big" id="mTot">0</div>
       <div class="muted" id="mSub"></div>
+    </div>
+    <div class="card">
+      <h3>📆 الصرف اليومي</h3>
+      <div class="days" id="dayStrip"></div>
+      <div class="dayhead"><b id="dayTitle"></b><b class="neg" id="dayTot"></b></div>
+      <div id="dayList"></div>
     </div>
     <div class="card"><h3>آخر العمليات</h3><div id="recent"></div></div>
   </section>
@@ -440,7 +459,7 @@ function renderAll(){
   $('mSub').textContent=region==='EG'?'':`${settings.nameA}: ${fmt(ms.A)} · ${settings.nameB}: ${fmt(ms.B)}`;
   const rec=sortTx(regTx()).slice(0,8);
   $('recent').innerHTML=rec.length?rec.map(txHTML).join(''):'<div class="empty">لسه مفيش عمليات هنا. دوس + عشان تضيف.</div>';
-  renderMonth();setStatus();
+  renderDays();renderMonth();setStatus();
 }
 function renderMonth(){
   const isM=repMode==='month';
@@ -462,6 +481,29 @@ function renderMonth(){
   $('rList').innerHTML=fl.length?fl.map(txHTML).join(''):'<div class="empty">مفيش عمليات</div>';
   if(isM)renderChart();
 }
+
+
+/* ===== الصرف اليومي ===== */
+const WD=['الأحد','الاتنين','التلات','الأربع','الخميس','الجمعة','السبت'];
+let selDay=today();
+function renderDays(){
+  const n=30,list=regTx(),tot={};
+  list.forEach(t=>{if(t.t==='exp')tot[t.d]=(tot[t.d]||0)+t.amt});
+  const days=[];for(let i=0;i<n;i++)days.push(iso(new Date(Date.now()-i*864e5)));
+  if(!days.includes(selDay))selDay=days[0];
+  const max=Math.max(1,...days.map(d=>tot[d]||0));
+  const td=today();
+  $('dayStrip').innerHTML=days.map(d=>{const x=new Date(d+'T00:00'),v=tot[d]||0;
+    return `<button class="day ${d===selDay?'on':''} ${v?'':'zero'} ${d===td?'today':''}" data-d="${d}">
+      <small>${d===td?'النهاردة':WD[x.getDay()]}</small><div class="dn2">${x.getDate()}</div><small>${MONTHS[x.getMonth()]}</small>
+      <div class="vb"><i style="height:${v?Math.max(8,v/max*100):6}%"></i></div><div class="dv">${v?num(v):'—'}</div></button>`}).join('');
+  const x=new Date(selDay+'T00:00');
+  const dl=sortTx(list.filter(t=>t.d===selDay));
+  $('dayTitle').textContent=(selDay===td?'النهاردة · ':'')+WD[x.getDay()]+' '+x.getDate()+' '+MONTHS[x.getMonth()];
+  $('dayTot').textContent=tot[selDay]?fmt(tot[selDay]):'';
+  $('dayList').innerHTML=dl.length?dl.map(txHTML).join(''):'<div class="empty">مفيش عمليات في اليوم ده</div>';
+}
+$('dayStrip').onclick=e=>{const b=e.target.closest('.day');if(!b)return;selDay=b.dataset.d;renderDays()};
 
 /* ===== مقارنة الشهور ===== */
 let cN=6;

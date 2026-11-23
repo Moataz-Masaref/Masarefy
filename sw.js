@@ -1,5 +1,5 @@
-// مصاريفي v9 — بيجيب أحدث نسخة من النت الأول، ولو مفيش نت بيشتغل من النسخة المحفوظة
-const C='masarefy-v9';
+// مصاريفي v10 — بيجيب أحدث نسخة من النت الأول، ولو مفيش نت بيشتغل من النسخة المحفوظة
+const C='masarefy-v10';
 const F=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>{
   e.waitUntil(caches.open(C).then(c=>Promise.all(F.map(u=>fetch(new Request(u,{cache:'reload'})).then(r=>r.ok&&c.put(u,r)).catch(()=>{})))));
